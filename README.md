@@ -8,7 +8,7 @@
 
 ## 项目概述
 
-本项目是一个**模块化、可扩展的思维链 (CoT) 推理评测框架**，服务于 NLP 大作业的 Bonus 部分。
+本项目是一个**模块化、可扩展的思维链 (CoT) 推理评测框架**。
 
 核心架构为 **"端云协同"**：
 
@@ -188,11 +188,11 @@ print(dataset[0]["ground_truth"])
 
 | 特性 | 实现 |
 |------|------|
-| 🔄 自动重试 | 指数退避 (1s → 2s → 4s)，最多 3 次 |
-| ⏱️ 超时控制 | 连接超时 30s + 读取超时 300s（适应长 CoT） |
-| 🚦 并发控制 | BoundedSemaphore，默认最多 8 并发 |
-| 🔗 连接复用 | Session + HTTPAdapter 连接池 |
-| 🏥 健康检查 | `check_health()` 验证 API 可用性 |
+| 自动重试 | 指数退避 (1s → 2s → 4s)，最多 3 次 |
+| 超时控制 | 连接超时 30s + 读取超时 300s（适应长 CoT） |
+| 并发控制 | BoundedSemaphore，默认最多 8 并发 |
+| 连接复用 | Session + HTTPAdapter 连接池 |
+| 健康检查 | `check_health()` 验证 API 可用性 |
 
 ```python
 from harness.llm_client import LLMClient
