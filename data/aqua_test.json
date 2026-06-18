@@ -1,0 +1,32 @@
+[
+    {
+        "question": "Two trains are traveling toward each other. Train A leaves Station A at 60 mph, and Train B leaves Station B at 80 mph. If the distance between Station A and Station B is 280 miles, how long will it take for the two trains to meet?",
+        "options": ["1 hour", "2 hours", "3 hours", "4 hours", "5 hours"],
+        "correct": "B",
+        "rationale": "Combined speed = 60 + 80 = 140 mph. Time = Distance / Speed = 280 / 140 = 2 hours."
+    },
+    {
+        "question": "If x + y = 10 and x - y = 4, what is the value of x?",
+        "options": ["3", "5", "7", "8", "10"],
+        "correct": "C",
+        "rationale": "Adding the two equations: 2x = 14, so x = 7."
+    },
+    {
+        "question": "What is 25% of 200?",
+        "options": ["25", "40", "50", "75", "100"],
+        "correct": "C",
+        "rationale": "25% = 0.25. 0.25 × 200 = 50."
+    },
+    {
+        "question": "A store offers a 20% discount on a $150 item. How much does the item cost after the discount?",
+        "options": ["$100", "$110", "$120", "$130", "$140"],
+        "correct": "C",
+        "rationale": "Discount = 150 × 0.20 = $30. Final price = 150 - 30 = $120."
+    },
+    {
+        "question": "In a class of 30 students, the ratio of boys to girls is 2:3. How many girls are there?",
+        "options": ["10", "12", "15", "18", "20"],
+        "correct": "D",
+        "rationale": "Total parts = 2 + 3 = 5. Girls = (3/5) × 30 = 18."
+    }
+]

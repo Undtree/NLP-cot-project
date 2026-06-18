@@ -1,0 +1,24 @@
+# Harness Engineering for CoT Reasoning Project
+# =============================================
+# 核心依赖
+
+# OpenAI 兼容客户端（用于调用 vLLM API）
+openai>=1.0.0
+
+# HTTP 请求库（llm_client.py 使用）
+requests>=2.31.0
+urllib3>=2.0.0
+
+# 进度条（可选，但推荐）
+tqdm>=4.66.0
+
+# 数据处理
+pandas>=2.0.0
+
+# 注意：如果在云端 ECS 上运行 vLLM 服务，还需要额外安装：
+#   vllm>=0.5.0
+#   torch>=2.4.0
+#   transformers>=4.44.0
+#   modelscope>=1.16.0
+#   lm-format-enforcer>=0.10.0
+# 详见对话中的云端配置步骤。
