@@ -109,18 +109,20 @@ def normalize_answer(answer: str) -> str:
 # ---------- 答案提取模式 ----------
 
 # 多种答案提取正则模式（按优先级排列）
+# (?:is\s*:?\s*|:\s*) 能同时匹配 "is"、":"、"is:"、"is :" 等变体
+# \s* (非 \s+) 在关键词后，兼容 "answer:X"（无空格）的边界情况
 ANSWER_PATTERNS = [
-    # 模式 1: "The answer is X" 或 "answer is X"
-    (r"(?:the\s+)?answer\s+(?:is|:)\s*\(?([A-E])\)?", "answer_is"),
+    # 模式 1: "The answer is X" / "answer is: X" / "answer: X" / "answer:X"
+    (r"(?:the\s+)?answer\s*(?:is\s*:?\s*|:\s*)\(?([A-E])\)?", "answer_is"),
 
     # 模式 2: "Therefore, the answer is X"
-    (r"(?:therefore|thus|so|hence)[,\s]+(?:the\s+)?answer\s+(?:is|:)\s*\(?([A-E])\)?", "therefore_answer_is"),
+    (r"(?:therefore|thus|so|hence)[,\s]+(?:the\s+)?answer\s*(?:is\s*:?\s*|:\s*)\(?([A-E])\)?", "therefore_answer_is"),
 
     # 模式 3: "I choose X" 或 "I select X"
     (r"(?:i\s+)?(?:choose|select|pick)\s+\(?([A-E])\)?", "choose_select"),
 
     # 模式 4: "The correct option is X"
-    (r"(?:the\s+)?correct\s+(?:option|choice|answer)\s+(?:is|:)\s*\(?([A-E])\)?", "correct_option"),
+    (r"(?:the\s+)?correct\s+(?:option|choice|answer)\s*(?:is\s*:?\s*|:\s*)\(?([A-E])\)?", "correct_option"),
 
     # 模式 5: 行首孤立的大写字母 (最后手段)
     (r"^\(?([A-E])\)?[\.\s]*$", "isolated_letter"),
@@ -133,6 +135,10 @@ ANSWER_PATTERNS = [
 
     # 模式 8: "\boxed{X}" (LaTeX 风格)
     (r"\\boxed\{([A-E])\}", "latex_boxed"),
+
+    # 模式 9: 文本中最后一个孤立选项字母 (通用回退)
+    # 使用负向前瞻确保匹配的是最后一个 A-E
+    (r"\b([A-E])\b(?!.*\b[A-E]\b)", "last_letter_fallback"),
 ]
 
 
