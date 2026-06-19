@@ -23,7 +23,7 @@ Harness Engineering 的主入口脚本。
     python main.py --run-all
 
     # 指定云端 API 地址
-    python main.py --strategy baseline --base-url http://10.0.0.1:8000/v1
+    python main.py --strategy baseline --base-url http://<ECS API>:8000/v1
 
     # 快速检查云端连接
     python main.py --check-health
@@ -228,7 +228,7 @@ def main():
   python main.py --strategy self_consistency --paths 5   # 运行自洽性策略
   python main.py --strategy baseline --max-samples 10 --verbose
   python main.py --run-all                 # 依次运行所有已注册策略
-  python main.py --strategy baseline --base-url http://10.0.0.1:8000/v1
+  python main.py --strategy baseline --base-url http://<ECS IP>:8000/v1
   python main.py --check-health            # 检查云端连接
         """,
     )
@@ -356,7 +356,7 @@ def main():
 
     # ---- 初始化 LLM 客户端 ----
     base_url = args.base_url or os.environ.get(
-        "LLM_BASE_URL", "http://localhost:8000/v1"
+        "LLM_BASE_URL", "http://124.70.101.1:8000/v1"
     )
     model_name = args.model_name or os.environ.get(
         "LLM_MODEL_NAME", "qwen2.5-coder-32b"

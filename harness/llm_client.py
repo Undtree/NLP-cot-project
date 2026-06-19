@@ -11,6 +11,8 @@ LLM 客户端封装 (LLM Client Wrapper)
 云端 API 地址:
     http://<华为云ECS公网IP>:8000/v1
 
+我们的服务器公网 IP 为 124.70.101.1
+
 使用方式:
     from harness.llm_client import LLMClient
 
@@ -86,7 +88,7 @@ class LLMClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str = "http://124.70.101.1:8000/v1",
         model_name: str = "qwen2.5-coder-32b",
         api_key: str = "EMPTY",
         max_retries: int = 3,
@@ -371,7 +373,7 @@ def create_client_from_env() -> LLMClient:
     """
     import os
 
-    base_url = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
+    base_url = os.environ.get("LLM_BASE_URL", "http://124.70.101.1:8000/v1")
     model_name = os.environ.get("LLM_MODEL_NAME", "qwen2.5-coder-32b")
     api_key = os.environ.get("LLM_API_KEY", "EMPTY")
     timeout = int(os.environ.get("LLM_TIMEOUT", "300"))
