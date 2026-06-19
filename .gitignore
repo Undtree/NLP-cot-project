@@ -1,2 +1,7 @@
-#folders
-/.vscode
+# Dependencies
+.waylog/
+node_modules/
+.venv/
+venv/
+__pycache__/
+.vscode/
