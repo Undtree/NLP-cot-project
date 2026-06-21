@@ -1,4 +1,4 @@
-# CoT Harness Engineering — 思维链推理评测框架
+# CoT — 思维链推理评测框架
 
 > **选题二：基于大语言模型的思维链推理 (Chain-of-Thought Reasoning)**
 >
@@ -38,13 +38,14 @@
 
 组员申请 Notebook 时务必确认 GPU 规格：
 
-| GPU 规格 | 显存 | 推荐模型 | 说明 |
+| GPU 规格 | 推荐显存 | 推荐模型 | 说明 |
 |----------|------|----------|------|
 | V100 32GB | 32 GB | `Qwen/Qwen2.5-Coder-32B-Instruct-AWQ` | 可跑 32B AWQ 量化模型 |
 | V100 16GB / T4 | 16 GB | `Qwen/Qwen2.5-Coder-7B-Instruct` | **只能跑 7B 模型** |
 | T4 16GB | 16 GB | `Qwen/Qwen2.5-Coder-7B-Instruct` | 同上，32B 会 OOM |
 
 > **⚡ 关键提醒**：如果你只有 16GB 显存的卡，绝对不要尝试加载 32B 模型（含 AWQ 量化），否则会直接 `CUDA out of memory`！
+> 可以尝试一下 ModelScope 上免费实例的 24GB 显存能否加载 32B-AWQ 模型。
 
 ---
 
