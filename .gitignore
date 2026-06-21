@@ -6,5 +6,15 @@ venv/
 __pycache__/
 .vscode/
 
+# Environment (API keys, local config)
+.env
+
+# Model files (downloaded by vLLM / HuggingFace / ModelScope)
+models/
+*.bin
+*.safetensors
+*.gguf
+*.pt
+
 # results
 results/

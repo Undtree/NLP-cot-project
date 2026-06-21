@@ -1,22 +1,24 @@
 """
 LLM 客户端封装 (LLM Client Wrapper)
 ------------------------------------
-封装对华为云 vLLM API 的调用逻辑，提供:
+封装对 vLLM API 的调用逻辑，提供:
   - OpenAI 兼容的 Chat Completions 接口
   - 自动重试 (Retry with Exponential Backoff)
   - 超时控制 (Timeout)
   - 并发控制 (Semaphore-based Rate Limiting)
   - 连接池复用 (Session-based)
 
-云端 API 地址:
-    http://<华为云ECS公网IP>:8000/v1
-
-我们的服务器公网 IP 为 124.70.101.1
+API 地址默认从环境变量 LLM_API_BASE 读取，
+适用于 Notebook 本地 vLLM 或远程 API 服务。
 
 使用方式:
     from harness.llm_client import LLMClient
 
-    client = LLMClient(base_url="http://<IP>:8000/v1")
+    # 推荐：使用环境变量配置
+    client = LLMClient()
+
+    # 或显式指定
+    client = LLMClient(base_url="http://localhost:8000/v1")
     response = client.chat("你好，请回答一个问题...")
 """
 
@@ -79,7 +81,7 @@ class LLMClient:
 
     Args:
         base_url: 云端 API 地址，例如 "http://10.0.0.1:8000/v1"
-        model_name: 模型名称，例如 "qwen2.5-coder-32b"
+        model_name: 模型名称，例如 "qwen2.5-coder-7b"
         api_key: API 密钥 (vLLM 默认不需要，可设 "EMPTY")
         max_retries: 最大重试次数
         timeout: 每次请求的超时时间 (秒)
@@ -88,28 +90,31 @@ class LLMClient:
 
     def __init__(
         self,
-        base_url: str = "http://124.70.101.1:8000/v1",
-        model_name: str = "qwen2.5-coder-32b",
-        api_key: str = "EMPTY",
+        base_url: str = None,
+        model_name: str = None,
+        api_key: str = None,
         max_retries: int = 3,
-        timeout: int = 300,
-        max_concurrent: int = 8,
+        timeout: int = None,
+        max_concurrent: int = None,
     ):
-        self.base_url = base_url.rstrip("/")
-        self.model_name = model_name
-        self.api_key = api_key
-        self.timeout = timeout
+        # 从环境变量读取默认值（支持 .env 文件）
+        import os as _os
+        self.base_url = (base_url or _os.getenv("LLM_API_BASE", "http://localhost:8000/v1")).rstrip("/")
+        self.model_name = model_name or _os.getenv("LLM_MODEL_NAME", "qwen2.5-coder-7b")
+        self.api_key = api_key or _os.getenv("LLM_API_KEY", "EMPTY")
+        self.timeout = timeout or int(_os.getenv("LLM_TIMEOUT", "300"))
+        _max_concurrent = max_concurrent or int(_os.getenv("LLM_MAX_CONCURRENT", "4"))
 
         # 并发控制
-        self._rate_limiter = RateLimiter(max_concurrent)
+        self._rate_limiter = RateLimiter(_max_concurrent)
 
         # 创建带重试机制的 Session
         self._session = self._create_session(max_retries)
 
         logger.info(
             f"LLMClient 初始化完成: base_url={self.base_url}, "
-            f"model={self.model_name}, timeout={timeout}s, "
-            f"max_concurrent={max_concurrent}, max_retries={max_retries}"
+            f"model={self.model_name}, timeout={self.timeout}s, "
+            f"max_concurrent={_max_concurrent}, max_retries={max_retries}"
         )
 
     def _create_session(self, max_retries: int) -> requests.Session:
@@ -363,26 +368,16 @@ class LLMClient:
 
 def create_client_from_env() -> LLMClient:
     """
-    从环境变量创建 LLMClient。
+    从环境变量创建 LLMClient（使用 .env 或系统环境变量）。
+
     支持的环境变量:
-    - LLM_BASE_URL: 云端 API 地址
+    - LLM_API_BASE: API 地址
     - LLM_MODEL_NAME: 模型名称
     - LLM_API_KEY: API 密钥
     - LLM_TIMEOUT: 超时时间 (秒)
     - LLM_MAX_CONCURRENT: 最大并发数
+
+    注：LLMClient() 无参构造已自动读取环境变量，
+    此函数保留用于显式创建场景。
     """
-    import os
-
-    base_url = os.environ.get("LLM_BASE_URL", "http://124.70.101.1:8000/v1")
-    model_name = os.environ.get("LLM_MODEL_NAME", "qwen2.5-coder-32b")
-    api_key = os.environ.get("LLM_API_KEY", "EMPTY")
-    timeout = int(os.environ.get("LLM_TIMEOUT", "300"))
-    max_concurrent = int(os.environ.get("LLM_MAX_CONCURRENT", "8"))
-
-    return LLMClient(
-        base_url=base_url,
-        model_name=model_name,
-        api_key=api_key,
-        timeout=timeout,
-        max_concurrent=max_concurrent,
-    )
+    return LLMClient()

@@ -1,6 +1,9 @@
 # Harness Engineering for CoT Reasoning Project
 # =============================================
-# 核心依赖
+# 核心依赖（在所有 Notebook 实例上安装）
+
+# 环境变量管理（从 .env 文件读取配置）
+python-dotenv>=1.0.0
 
 # OpenAI 兼容客户端（用于调用 vLLM API）
 openai>=1.0.0
@@ -15,10 +18,16 @@ tqdm>=4.66.0
 # 数据处理
 pandas>=2.0.0
 
-# 注意：如果在云端 ECS 上运行 vLLM 服务，还需要额外安装：
-#   vllm>=0.5.0
-#   torch>=2.4.0
-#   transformers>=4.44.0
-#   modelscope>=1.16.0
-#   lm-format-enforcer>=0.10.0
-# 详见对话中的云端配置步骤。
+# =============================================
+# 以下为 Notebook 环境依赖（按需安装）
+# =============================================
+# 方案 A：vLLM API 服务模式（推荐，代码无需改动）
+#   pip install vllm>=0.5.0
+#   vllm serve Qwen/Qwen2.5-Coder-7B-Instruct --port 8000
+#
+# 方案 B：vLLM 离线批处理模式（需调整代码）
+#   pip install vllm>=0.5.0 torch>=2.4.0 transformers>=4.44.0
+#
+# ModelScope 加速（国内网络推荐）
+#   pip install modelscope>=1.16.0
+#   export VLLM_USE_MODELSCOPE=True

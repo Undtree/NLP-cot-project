@@ -7,25 +7,24 @@ Harness Engineering 的主入口脚本。
    每个组员的策略需要单独运行、单独评估、单独出报告。
 
 负责:
-1. 检查云端 API 连接
+1. 检查 API 连接
 2. 加载数据集
 3. 实例化【一个】组员的策略类
 4. 运行实验循环（逐样本调用 solve -> 评估 -> 记录）
 5. 生成最终评估报告
 
 使用方式:
-    # 【推荐】运行单个策略（每次只跑一个）
+    # 配置 .env 文件后直接运行
     python main.py --strategy baseline
     python main.py --strategy baseline --max-samples 10 --verbose
-    python main.py --strategy self_consistency --paths 5
 
     # 依次跑所有已注册的策略（用于最终汇总对比）
     python main.py --run-all
 
-    # 指定云端 API 地址
-    python main.py --strategy baseline --base-url http://<ECS API>:8000/v1
+    # 指定 API 地址（覆盖 .env 配置）
+    python main.py --strategy baseline --base-url http://localhost:8000/v1
 
-    # 快速检查云端连接
+    # 快速检查 API 连接
     python main.py --check-health
 """
 
@@ -35,6 +34,13 @@ import time
 import argparse
 import logging
 from typing import Optional
+
+# 加载 .env 文件（若存在）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv 未安装时忽略
 
 # 将项目根目录加入 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -228,7 +234,7 @@ def main():
   python main.py --strategy self_consistency --paths 5   # 运行自洽性策略
   python main.py --strategy baseline --max-samples 10 --verbose
   python main.py --run-all                 # 依次运行所有已注册策略
-  python main.py --strategy baseline --base-url http://<ECS IP>:8000/v1
+  python main.py --strategy baseline --base-url http://localhost:8000/v1
   python main.py --check-health            # 检查云端连接
         """,
     )
@@ -256,18 +262,18 @@ def main():
         help="最大测试样本数（用于快速调试）",
     )
 
-    # 云端 API 参数
+    # API 参数
     parser.add_argument(
         "--base-url",
         type=str,
         default=None,
-        help="云端 API 地址 (默认从环境变量 LLM_BASE_URL 读取)",
+        help="API 地址 (默认从 .env 的 LLM_API_BASE 读取)",
     )
     parser.add_argument(
         "--model-name",
         type=str,
         default=None,
-        help="模型名称 (默认: qwen2.5-coder-32b)",
+        help="模型名称 (默认: qwen2.5-coder-7b)",
     )
     parser.add_argument(
         "--api-key",
@@ -355,12 +361,9 @@ def main():
         return
 
     # ---- 初始化 LLM 客户端 ----
-    base_url = args.base_url or os.environ.get(
-        "LLM_BASE_URL", "http://124.70.101.1:8000/v1"
-    )
-    model_name = args.model_name or os.environ.get(
-        "LLM_MODEL_NAME", "qwen2.5-coder-32b"
-    )
+    # 优先使用命令行参数，其次环境变量 (.env)，最后代码默认值
+    base_url = args.base_url or os.environ.get("LLM_API_BASE")
+    model_name = args.model_name or os.environ.get("LLM_MODEL_NAME")
 
     client = LLMClient(
         base_url=base_url,
@@ -372,21 +375,20 @@ def main():
 
     # 健康检查
     if args.check_health:
-        print(f"正在检查云端 API ({base_url}) ...")
+        print(f"正在检查 API ({client.base_url}) ...")
         if client.check_health():
-            print("✓ 云端 API 连接正常！")
+            print("✓ API 连接正常！")
         else:
-            print("✗ 云端 API 连接失败，请检查:")
-            print(f"  1. ECS 服务器是否运行")
-            print(f"  2. vLLM 服务是否启动 (tmux attach -t qwen_server)")
-            print(f"  3. 安全组是否放通 8000 端口")
-            print(f"  4. base_url 是否正确: {base_url}")
+            print("✗ API 连接失败，请检查:")
+            print(f"  1. vLLM 服务是否已启动: vllm serve <model> --port 8000")
+            print(f"  2. API 地址是否正确: {client.base_url}")
+            print(f"  3. 如使用远程服务，检查网络和防火墙")
         return
 
     # 健康检查（跑实验前快速验证）
     if not client.check_health():
         logger.error(
-            f"云端 API 不可用 ({base_url})。"
+            f"API 不可用 ({client.base_url})。"
             f"使用 --check-health 单独检查连接。"
         )
         logger.warning("继续尝试运行，但可能会失败...")
