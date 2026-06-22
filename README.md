@@ -106,7 +106,7 @@ cp .env.example .env
 ```bash
 LLM_API_BASE="http://localhost:8000/v1"
 LLM_API_KEY="EMPTY"
-LLM_MODEL_NAME="qwen2.5-coder-7b"
+LLM_MODEL_NAME="Qwen/Qwen2.5-Coder-7B-Instruct"
 LLM_MAX_CONCURRENT=2    # 16GB 显存建议保守并发
 ```
 
