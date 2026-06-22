@@ -73,7 +73,9 @@ STRATEGY_REGISTRY = {
     # "self_consistency": "methods.self_consistency.SelfConsistencyTask",
     # "verifier": "methods.verifier_agent.VerifierAgent",
     # "rag_cot": "methods.rag_cot.RAGCoT",
-    # "debate": "methods.multi_agent_debate.DebateTask",
+    "debate": "methods.multi_agent_debate.DebateTask",
+    "reflective_debate": "methods.multi_agent_debate.ReflectiveDebateTask",
+    "three_agent_debate": "methods.multi_agent_debate.ThreeAgentReflectiveDebateTask",
 }
 
 
