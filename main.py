@@ -71,11 +71,11 @@ STRATEGY_REGISTRY = {
     "baseline": "methods.baseline_cot.BaselineCoT",
     # === 组员写完策略后，取消下面相应行的注释 ===
     # "self_consistency": "methods.self_consistency.SelfConsistencyTask",
-    # "verifier": "methods.verifier_agent.VerifierAgent",
     # "rag_cot": "methods.rag_cot.RAGCoT",
     "debate": "methods.multi_agent_debate.DebateTask",
     "reflective_debate": "methods.multi_agent_debate.ReflectiveDebateTask",
     "three_agent_debate": "methods.multi_agent_debate.ThreeAgentReflectiveDebateTask",
+    "verifier_cot": "methods.verifier_cot.VerifierCoT",
 }
 
 
