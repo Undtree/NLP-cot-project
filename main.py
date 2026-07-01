@@ -70,7 +70,8 @@ logger = logging.getLogger("main")
 STRATEGY_REGISTRY = {
     "baseline": "methods.baseline_cot.BaselineCoT",
     # === 组员写完策略后，取消下面相应行的注释 ===
-    # "self_consistency": "methods.self_consistency.SelfConsistencyTask",
+    "self_consistency": "methods.self_consistency.SelfConsistencyTask",
+    # "verifier": "methods.verifier_agent.VerifierAgent",
     # "rag_cot": "methods.rag_cot.RAGCoT",
     "debate": "methods.multi_agent_debate.DebateTask",
     "reflective_debate": "methods.multi_agent_debate.ReflectiveDebateTask",
@@ -280,34 +281,40 @@ def main():
     parser.add_argument(
         "--api-key",
         type=str,
-        default="EMPTY",
-        help="API 密钥 (vLLM 默认为 EMPTY)",
+        default=None,
+        help="API 密钥 (默认从 .env 的 LLM_API_KEY 读取；vLLM 默认为 EMPTY)",
     )
     parser.add_argument(
         "--timeout",
         type=int,
-        default=300,
-        help="请求超时时间 (秒)",
+        default=None,
+        help="请求超时时间 (秒，默认从 .env 的 LLM_TIMEOUT 读取)",
     )
     parser.add_argument(
         "--max-concurrent",
         type=int,
-        default=8,
-        help="最大并发请求数",
+        default=None,
+        help="最大并发请求数 (默认从 .env 的 LLM_MAX_CONCURRENT 读取)",
     )
 
     # 策略参数
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.0,
-        help="采样温度",
+        default=None,
+        help="采样温度 (默认使用各策略内置值)",
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=4096,
         help="最大生成 token 数",
+    )
+    parser.add_argument(
+        "--paths",
+        type=int,
+        default=5,
+        help="Self-Consistency 采样的推理路径数量",
     )
 
     # 其他参数
@@ -449,11 +456,16 @@ def main():
             continue
 
         # 实例化策略
-        task = StrategyClass(
-            client=client,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-        )
+        strategy_kwargs = {
+            "client": client,
+            "max_tokens": args.max_tokens,
+        }
+        if args.temperature is not None:
+            strategy_kwargs["temperature"] = args.temperature
+        if strategy_name == "self_consistency":
+            strategy_kwargs["paths"] = args.paths
+
+        task = StrategyClass(**strategy_kwargs)
         logger.info(f"策略实例化: {task}")
 
         # 运行实验
