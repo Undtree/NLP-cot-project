@@ -2,7 +2,7 @@
 数据集加载器 (Dataset Loader)
 -----------------------------
 负责统一下载、清洗和格式化数据集。
-目前主要支持 AQuA 数据集格式，可扩展支持其他数据集。
+支持 AQuA（数学选择题）和 HotpotQA（多跳问答）两种格式。
 
 AQuA 数据集格式要求:
     每个样本为一个 JSON 对象，包含:
@@ -11,47 +11,61 @@ AQuA 数据集格式要求:
     - correct: str           # 正确答案
     - rationale: str         # 推理过程 (可选，用于训练/参考)
 
+HotpotQA 数据集格式要求:
+    每个样本包含:
+    - question: str          # 问题文本
+    - answer: str            # 标准答案
+    - context: list          # 上下文段落 (title + sentences)
+    - supporting_facts: list # 支持证据
+
 统一输出格式:
-    {
-        "id": str,              # 样本唯一标识
-        "question": str,        # 完整问题文本 (含选项)
-        "ground_truth": str,    # 标准答案
-        "options": list[str],   # 选项列表
-        "rationale": str,       # 参考推理过程
-    }
+    Sample 对象或 AQuADataset 对象
 """
 
 import json
 import os
 import re
 import hashlib
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Dict, Optional, Any, Tuple
+
+from .sample import Sample
 
 
-@dataclass
+# ============================================================
+# AQuA 数据集
+# ============================================================
+
 class AQuADataset:
     """AQuA 数据集的标准化数据结构"""
-    samples: List[Dict[str, Any]] = field(default_factory=list)
-    name: str = "aqua"
-    split: str = "test"
+    def __init__(self, samples=None, name="aqua", split="test"):
+        self.samples = samples or []
+        self.name = name
+        self.split = split
 
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int):
         return self.samples[idx]
 
     def __iter__(self):
         return iter(self.samples)
 
     def get_questions_only(self) -> List[str]:
-        """只返回问题文本列表，方便组员直接调用"""
-        return [s["question"] for s in self.samples]
+        """只返回问题文本列表"""
+        return [s["question"] if isinstance(s, dict) else s.question for s in self.samples]
 
     def get_ground_truths(self) -> List[str]:
         """只返回标准答案列表"""
-        return [s["ground_truth"] for s in self.samples]
+        return [s["ground_truth"] if isinstance(s, dict) else s.ground_truth for s in self.samples]
+
+    def to_samples(self) -> List[Sample]:
+        """将内部 dict 转换为 Sample 对象列表"""
+        return [
+            s if isinstance(s, Sample) else Sample.from_aqua_dict(s)
+            for s in self.samples
+        ]
 
 
 def _generate_sample_id(question: str, index: int) -> str:
@@ -191,22 +205,32 @@ def load_aqua_json(filepath: str) -> AQuADataset:
     return AQuADataset(samples=cleaned_samples, split=split)
 
 
-def load_dataset(filepath: str, dataset_type: str = "aqua") -> AQuADataset:
+def load_dataset(filepath: str, dataset_type: str = "aqua", **kwargs) -> Any:
     """
     统一的数据集加载入口。
-    可根据 dataset_type 扩展支持不同数据集格式。
 
     Args:
         filepath: 数据集文件路径
-        dataset_type: 数据集类型，目前支持 "aqua"
+        dataset_type: 数据集类型
+            - "aqua": AQuA 数学选择题 (默认)
+            - "hotpotqa": HotpotQA 多跳问答
+        **kwargs: 传递给具体加载器的参数
+            - max_samples: 最大样本数
+            - split: HotpotQA split (默认 "validation")
 
     Returns:
-        AQuADataset 对象
+        - dataset_type="aqua": AQuADataset 对象
+        - dataset_type="hotpotqa": (List[Sample], List[Dict]) 即 (samples, corpus)
     """
     if dataset_type == "aqua":
         return load_aqua_json(filepath)
+    elif dataset_type == "hotpotqa":
+        return load_hotpotqa(filepath, **kwargs)
     else:
-        raise ValueError(f"不支持的数据集类型: {dataset_type}。目前仅支持 'aqua'。")
+        raise ValueError(
+            f"不支持的数据集类型: {dataset_type}。"
+            f"目前支持: 'aqua', 'hotpotqa'。"
+        )
 
 
 # ---------- 便捷函数：下载 AQuA 数据集 ----------
@@ -243,3 +267,195 @@ def download_aqua_dataset(save_dir: str = "data") -> str:
         raise
 
     return save_path
+
+
+# ============================================================
+# HotpotQA 数据集加载
+# ============================================================
+
+def _clean_text(text: Any) -> str:
+    """清洗文本：合并多余空白"""
+    return re.sub(r"\s+", " ", str(text)).strip()
+
+
+def _extract_hotpotqa_context(record: Dict[str, Any]) -> List[Dict[str, str]]:
+    """从 HotpotQA 记录中提取 context 段落"""
+    context = record.get("context") or []
+    paragraphs: List[Dict[str, str]] = []
+
+    if isinstance(context, dict):
+        titles = context.get("title") or context.get("titles") or []
+        sentence_groups = context.get("sentences") or context.get("sentence") or []
+        for title, sentences in zip(titles, sentence_groups):
+            text = " ".join(map(str, sentences)) if isinstance(sentences, list) else str(sentences)
+            text = _clean_text(text)
+            if text:
+                paragraphs.append({"title": str(title), "text": text})
+        return paragraphs
+
+    if isinstance(context, list):
+        for item in context:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                title = str(item[0])
+                sentences = item[1]
+                text = " ".join(map(str, sentences)) if isinstance(sentences, list) else str(sentences)
+            elif isinstance(item, dict):
+                title = str(item.get("title", ""))
+                sentences = item.get("sentences", item.get("text", ""))
+                text = " ".join(map(str, sentences)) if isinstance(sentences, list) else str(sentences)
+            else:
+                continue
+            text = _clean_text(text)
+            if text:
+                paragraphs.append({"title": title, "text": text})
+
+    return paragraphs
+
+
+def _extract_hotpotqa_supporting_titles(record: Dict[str, Any]) -> List[str]:
+    """从 HotpotQA 记录中提取 supporting_facts 的标题"""
+    sf = record.get("supporting_facts") or record.get("supportingFacts") or []
+    titles: List[str] = []
+
+    if isinstance(sf, dict):
+        raw_titles = sf.get("title") or sf.get("titles") or []
+        titles = [str(t) for t in raw_titles]
+    elif isinstance(sf, list):
+        for item in sf:
+            if isinstance(item, (list, tuple)) and item:
+                titles.append(str(item[0]))
+            elif isinstance(item, dict) and "title" in item:
+                titles.append(str(item["title"]))
+
+    seen = set()
+    unique = []
+    for t in titles:
+        if t not in seen:
+            unique.append(t)
+            seen.add(t)
+    return unique
+
+
+def _normalize_hotpotqa_record(record: Dict[str, Any], index: int) -> Dict[str, Any]:
+    """规范化 HotpotQA 记录为统一格式"""
+    question = record.get("question")
+    answer = record.get("answer")
+    if question is None or answer is None:
+        raise ValueError(f"Record {index} has no question or answer field")
+
+    return {
+        "id": str(record.get("_id", record.get("id", index))),
+        "question": _clean_text(question),
+        "answer": _clean_text(answer),
+        "context": _extract_hotpotqa_context(record),
+        "supporting_titles": _extract_hotpotqa_supporting_titles(record),
+        "raw": record,
+    }
+
+
+def _read_hotpotqa_records(path: Path, max_records: Optional[int] = None) -> List[Dict[str, Any]]:
+    """从本地文件读取 HotpotQA 记录（支持 .json / .jsonl / .parquet）"""
+    if not path.exists():
+        raise FileNotFoundError(f"HotpotQA 文件不存在: {path}")
+
+    if path.suffix.lower() == ".parquet":
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError("读取 .parquet 文件需要安装 pandas 和 pyarrow")
+        return pd.read_parquet(path).to_dict(orient="records")
+
+    if path.suffix.lower() == ".jsonl":
+        records = []
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        return records
+
+    # .json
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("data", "examples", "records", "samples"):
+            if isinstance(data.get(key), list):
+                return data[key]
+    raise ValueError(f"不支持的 HotpotQA JSON 结构: {path}")
+
+
+def build_corpus_from_samples(samples: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """从 HotpotQA 样本的 context 段落构建 BM25 检索语料。
+
+    这是一个轻量本地语料方案，适用于课程项目。
+    相比索引完整 Wikipedia，它只用样本自带的 context 段落。
+
+    Args:
+        samples: 已规范化的 HotpotQA 样本列表
+
+    Returns:
+        语料文档列表，每项为 {"id": str, "title": str, "text": str}
+    """
+    corpus: List[Dict[str, str]] = []
+    seen = set()
+
+    for sample in samples:
+        for para in sample.get("context", []):
+            title = para["title"]
+            text = para["text"]
+            key = (title, text)
+            if key in seen:
+                continue
+            seen.add(key)
+            corpus.append({
+                "id": f"p{len(corpus)}",
+                "title": title,
+                "text": text,
+            })
+
+    if not corpus:
+        raise ValueError(
+            "未找到任何 context 段落。请使用 HotpotQA distractor 格式数据，"
+            "或提供自定义语料构建器。"
+        )
+    return corpus
+
+
+def load_hotpotqa(
+    data_path: str,
+    split: str = "validation",
+    max_samples: Optional[int] = None,
+) -> Tuple[List[Sample], List[Dict[str, str]]]:
+    """加载 HotpotQA 数据集并返回 (samples, corpus)。
+
+    支持本地 .json / .jsonl / .parquet 文件。
+
+    Args:
+        data_path: 数据文件路径
+        split: 数据集 split（仅用于标识）
+        max_samples: 最大样本数
+
+    Returns:
+        (Sample 列表, 语料文档列表)
+    """
+    records = _read_hotpotqa_records(Path(data_path), max_records=max_samples)
+
+    if max_samples is not None:
+        records = records[:max_samples]
+
+    # 规范化
+    normalized = [_normalize_hotpotqa_record(r, i) for i, r in enumerate(records)]
+
+    # 构建语料
+    corpus = build_corpus_from_samples(normalized)
+
+    # 转换为 Sample 对象
+    samples = [Sample.from_hotpotqa_dict(n) for n in normalized]
+
+    print(f"[信息] 成功加载 {len(samples)} 个 HotpotQA 样本 (split={split})")
+    print(f"[信息] 构建语料: {len(corpus)} 个段落")
+
+    return samples, corpus

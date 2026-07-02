@@ -18,6 +18,9 @@ tqdm>=4.66.0
 # 数据处理
 pandas>=2.0.0
 
+# HotpotQA / IRCoT 数据读取（parquet 格式）
+pyarrow>=14.0.0
+
 # =============================================
 # 以下为 Notebook 环境依赖（按需安装）
 # =============================================
@@ -31,3 +34,6 @@ pandas>=2.0.0
 # ModelScope 加速（国内网络推荐）
 #   pip install modelscope>=1.16.0
 #   export VLLM_USE_MODELSCOPE=True
+#
+# HuggingFace Datasets（可选，用于通过 HF 下载 HotpotQA）
+#   pip install datasets>=2.14.0

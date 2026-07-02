@@ -182,6 +182,95 @@ class ExperimentLogger:
 
         return run_id
 
+    def log_run_qa(
+        self,
+        eval_report,  # QAEvalReport
+        strategy_name: str,
+        config: Optional[Dict[str, Any]] = None,
+        dataset_name: str = "hotpotqa",
+        traces: Optional[List[Any]] = None,
+    ) -> str:
+        """
+        记录一次 QA 实验运行（HotpotQA 等自由文本 QA 任务）。
+
+        Args:
+            eval_report: QAEvalReport 对象
+            strategy_name: 策略名称
+            config: 策略配置
+            dataset_name: 数据集名称
+            traces: CoT 推理路径追踪列表 (可选)
+
+        Returns:
+            运行 ID 字符串
+        """
+        run_id = self._generate_run_id()
+        timestamp = datetime.now().isoformat()
+
+        # 构建逐样本结果
+        per_sample = []
+        for i, result in enumerate(eval_report.per_sample_results):
+            sample_record = {
+                "sample_id": result.sample_id,
+                "question": result.question[:500],
+                "ground_truth": result.ground_truth,
+                "prediction": result.prediction,
+                "em": result.em,
+                "f1": result.f1,
+                "title_recall": result.title_recall,
+                "retrieved_count": result.retrieved_count,
+                "llm_calls": result.llm_calls,
+            }
+
+            if traces and i < len(traces):
+                trace = traces[i]
+                sample_record["reasoning_steps"] = trace.reasoning_steps
+                sample_record["total_time_seconds"] = trace.total_time_seconds
+
+            per_sample.append(sample_record)
+
+        # 1. JSONL
+        jsonl_path = os.path.join(self.results_dir, f"run_{run_id}_{strategy_name}.jsonl")
+        with open(jsonl_path, "w", encoding="utf-8") as f:
+            for sample in per_sample:
+                f.write(json.dumps(sample, ensure_ascii=False) + "\n")
+
+        # 2. 汇总 JSON
+        summary_path = os.path.join(self.results_dir, f"run_{run_id}_{strategy_name}_summary.json")
+        summary_data = {
+            "run_id": run_id,
+            "strategy_name": strategy_name,
+            "timestamp": timestamp,
+            "dataset_name": dataset_name,
+            "config": config or {},
+            **eval_report.to_dict(),
+        }
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump(summary_data, f, ensure_ascii=False, indent=2)
+
+        # 3. CSV
+        csv_path = os.path.join(self.results_dir, f"run_{run_id}_{strategy_name}.csv")
+        if per_sample:
+            csv_columns = [
+                "sample_id", "question", "ground_truth", "prediction",
+                "em", "f1", "title_recall", "retrieved_count", "llm_calls",
+            ]
+            with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=csv_columns, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(per_sample)
+
+        # 4. 全局汇总
+        self._append_to_global_summary(summary_data)
+
+        logger.info(
+            f"QA 实验运行记录已保存:\n"
+            f"  JSONL: {jsonl_path}\n"
+            f"  JSON:  {summary_path}\n"
+            f"  CSV:   {csv_path}"
+        )
+
+        return run_id
+
     def _append_to_global_summary(self, summary: Dict[str, Any]):
         """
         追加到全局汇总 JSONL 文件。

@@ -407,6 +407,37 @@ class BaseTask(ABC):
 
         return trace
 
+    # ============================================================
+    # Sample-based 接口（泛用化扩展）
+    # ============================================================
+
+    def solve_sample(self, sample) -> str:
+        """基于 Sample 对象的求解接口。
+
+        默认从 Sample 中提取 question 字段调用 solve(question)。
+        需要访问数据集特定元数据（如 HotpotQA 的 context）的策略可重写此方法。
+
+        Args:
+            sample: Sample 对象，含 question, ground_truth, metadata
+
+        Returns:
+            模型输出（最终答案文本）
+        """
+        return self.solve(sample.question)
+
+    def solve_sample_with_trace(self, sample) -> CoTTrace:
+        """基于 Sample 对象的带 trace 求解接口。
+
+        默认从 Sample 中提取 question 字段调用 solve_with_trace(question)。
+
+        Args:
+            sample: Sample 对象
+
+        Returns:
+            CoTTrace 对象
+        """
+        return self.solve_with_trace(sample.question)
+
     def solve_agentic(self, question: str, **kwargs) -> ParsedTrace:
         """
         Agentic 推理求解（组员可重写）。

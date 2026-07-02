@@ -336,3 +336,184 @@ def evaluate_from_traces(
     questions = [t.question for t in traces]
 
     return evaluator.evaluate(raw_outputs, ground_truths, sample_ids, questions)
+
+
+# ============================================================
+# QA 评估器 (HotpotQA 等自由文本 QA 任务)
+# ============================================================
+
+import string as _string
+from collections import Counter as _Counter
+
+
+def _normalize_qa_text(text: str) -> str:
+    """QA 任务答案规范化：小写、去标点、去冠词、合并空白"""
+    text = str(text).lower()
+    text = "".join(ch for ch in text if ch not in _string.punctuation)
+    text = re.sub(r"\b(a|an|the)\b", " ", text)
+    return " ".join(text.split())
+
+
+def qa_exact_match(prediction: str, gold: str) -> float:
+    """精确匹配 (EM)：规范化后完全相同"""
+    return float(_normalize_qa_text(prediction) == _normalize_qa_text(gold))
+
+
+def qa_token_f1(prediction: str, gold: str) -> float:
+    """词级 F1：token 级别的 precision 和 recall 调和平均"""
+    pred_tokens = _normalize_qa_text(prediction).split()
+    gold_tokens = _normalize_qa_text(gold).split()
+    if not pred_tokens or not gold_tokens:
+        return float(pred_tokens == gold_tokens)
+
+    common = _Counter(pred_tokens) & _Counter(gold_tokens)
+    num_same = sum(common.values())
+    if num_same == 0:
+        return 0.0
+    precision = num_same / len(pred_tokens)
+    recall = num_same / len(gold_tokens)
+    return 2 * precision * recall / (precision + recall)
+
+
+def qa_title_recall(
+    retrieved_passages: List[Dict[str, str]],
+    supporting_titles: List[str],
+) -> float:
+    """标题召回率：检索到的段落标题覆盖 supporting facts 标题的比例"""
+    gold = set(supporting_titles)
+    if not gold:
+        return 0.0
+    retrieved_titles = {item.get("title", "") for item in retrieved_passages}
+    return len(gold & retrieved_titles) / len(gold)
+
+
+@dataclass
+class QAEvalResult:
+    """单个 QA 样本的评估结果"""
+    sample_id: str = ""
+    question: str = ""
+    ground_truth: str = ""
+    prediction: str = ""
+    em: float = 0.0
+    f1: float = 0.0
+    title_recall: float = 0.0
+    retrieved_count: int = 0
+    llm_calls: int = 0
+
+
+@dataclass
+class QAEvalReport:
+    """QA 任务评估报告"""
+    total_samples: int = 0
+    em: float = 0.0
+    f1: float = 0.0
+    title_recall: float = 0.0
+    avg_llm_calls: float = 0.0
+    avg_retrieved: float = 0.0
+    per_sample_results: List[QAEvalResult] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_samples": self.total_samples,
+            "em": self.em,
+            "f1": self.f1,
+            "title_recall": self.title_recall,
+            "avg_llm_calls": self.avg_llm_calls,
+            "avg_retrieved": self.avg_retrieved,
+        }
+
+    def __str__(self) -> str:
+        return (
+            f"QAEvalReport(n={self.total_samples}, "
+            f"EM={self.em:.3f}, F1={self.f1:.3f}, "
+            f"TitleRecall={self.title_recall:.3f}, "
+            f"AvgLLMCalls={self.avg_llm_calls:.1f})"
+        )
+
+
+class QAMatchEvaluator:
+    """QA 任务评估器（HotpotQA 等多跳问答）。
+
+    指标: EM, F1, Title Recall, 平均 LLM 调用次数, 平均检索段落数。
+    """
+
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+
+    def evaluate_single(
+        self,
+        prediction: str,
+        ground_truth: str,
+        retrieved_passages: Optional[List[Dict[str, str]]] = None,
+        supporting_titles: Optional[List[str]] = None,
+        llm_calls: int = 0,
+        sample_id: str = "",
+        question: str = "",
+    ) -> QAEvalResult:
+        """评估单个样本"""
+        retrieved_passages = retrieved_passages or []
+        supporting_titles = supporting_titles or []
+
+        return QAEvalResult(
+            sample_id=sample_id,
+            question=question,
+            ground_truth=ground_truth,
+            prediction=prediction,
+            em=qa_exact_match(prediction, ground_truth),
+            f1=qa_token_f1(prediction, ground_truth),
+            title_recall=qa_title_recall(retrieved_passages, supporting_titles),
+            retrieved_count=len(retrieved_passages),
+            llm_calls=llm_calls,
+        )
+
+    def evaluate(
+        self,
+        predictions: List[str],
+        ground_truths: List[str],
+        retrieved_list: Optional[List[List[Dict[str, str]]]] = None,
+        supporting_titles_list: Optional[List[List[str]]] = None,
+        llm_calls_list: Optional[List[int]] = None,
+        sample_ids: Optional[List[str]] = None,
+        questions: Optional[List[str]] = None,
+    ) -> QAEvalReport:
+        """批量评估"""
+        n = len(predictions)
+        if sample_ids is None:
+            sample_ids = [f"sample_{i:04d}" for i in range(n)]
+        if questions is None:
+            questions = [""] * n
+        if retrieved_list is None:
+            retrieved_list = [[] for _ in range(n)]
+        if supporting_titles_list is None:
+            supporting_titles_list = [[] for _ in range(n)]
+        if llm_calls_list is None:
+            llm_calls_list = [0] * n
+
+        results = []
+        for i in range(n):
+            r = self.evaluate_single(
+                prediction=predictions[i],
+                ground_truth=ground_truths[i],
+                retrieved_passages=retrieved_list[i],
+                supporting_titles=supporting_titles_list[i],
+                llm_calls=llm_calls_list[i],
+                sample_id=sample_ids[i],
+                question=questions[i],
+            )
+            results.append(r)
+
+        n_valid = max(n, 1)
+        report = QAEvalReport(
+            total_samples=n,
+            em=sum(r.em for r in results) / n_valid,
+            f1=sum(r.f1 for r in results) / n_valid,
+            title_recall=sum(r.title_recall for r in results) / n_valid,
+            avg_llm_calls=sum(r.llm_calls for r in results) / n_valid,
+            avg_retrieved=sum(r.retrieved_count for r in results) / n_valid,
+            per_sample_results=results,
+        )
+
+        if self.verbose:
+            logger.info(f"QA 评估完成: {report}")
+
+        return report
